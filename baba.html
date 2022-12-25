@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf8" />
+
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Baba Overlay</title>
+
+    <style>
+      body {
+        background-color: #000000;
+        margin: 0px;
+      }
+
+      #main {
+        align-items: stretch;
+        background-color: #000000;
+        color: white;
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        font-family: Hussar;
+        height: 1em;
+        padding-bottom: 2px;
+        padding-top: 2px;
+        width: 100%;
+      }
+
+      #main > div {
+        flex: 1;
+      }
+
+      #leftDiv {
+        text-align: left;
+        margin-left: 5px;
+      }
+
+      #midDiv {
+        text-align: center;
+        white-space: nowrap;
+      }
+
+      #rightDiv {
+        font-family: "dejavu sans mono";
+        text-align: right;
+        margin-right: 5px;
+      }
+    </style>
+
+    <script>
+      var mainElem = null;
+      var leftElem = null;
+      var midElem = null;
+      var rightElem = null;
+      var websock = null;
+      var cleanupTimeout = null;
+
+      var sec = 0;
+      var min = 0;
+      var minStr = "00";
+      var interval = null;
+      var levelCount = 0;
+      var queueOpen = false;
+      var id = null;
+      var connectInterval = 0;
+
+      //
+      // Initialize and sync to Yabba
+      //
+
+      function on_init(data) {
+        id = data['id'];
+
+        websock.send(JSON.stringify({
+          'op': 'syncRequest',
+          'id': id
+        }));
+      }
+
+      function on_syncReply(data) {
+        if (data['id'] != id)
+          return;
+
+        if (interval != null) {
+          clearInterval(interval);
+          interval = null;
+        }
+
+        if (cleanupTimeout != null) {
+          clearTimeout(cleanupTimeout);
+          cleanupTimeout = null;
+        }
+
+        levelCount = data['queueSize'];
+        queueOpen = data['queueOpen'];
+        updateQueueDisplay(+0);
+        updateTitle(data);
+
+        if (data['playing']) {
+          min = data['playMinutes'];
+          sec = data['playSeconds'];
+          minStr = padStart(min.toString());
+
+          timerUpdate();
+
+          if (data["playPaused"] == false)
+            interval = setInterval(timerTick, 1000);
+        }
+        else
+          timerClear();
+      }
+
+      //
+      // Helpers
+      //
+
+      function updateQueueDisplay(adjust) {
+        var status = queueOpen ? "open" : "closed";
+
+        levelCount += adjust;
+        leftElem.innerText = `Queue ${status} (${levelCount} in queue)`;
+      }
+
+      function setQueueIsOpen(q)
+      {
+        queueOpen = q;
+
+        var status = queueOpen ? "open" : "closed";
+
+        leftElem.innerText = `Queue ${status} (${levelCount} in queue)`;
+      }
+
+      function padStart(s)
+      {
+        if (s.length != 2)
+          s = "0" + s;
+
+        return s;
+      }
+
+      function timerUpdate() {
+        var secStr = padStart(sec.toString());
+
+        rightElem.innerHTML = `🕛 ${minStr}:${secStr}`
+      }
+
+      function updateTitle(data)
+      {
+        if (data['playCode'] == undefined) {
+          midElem.innerText = "";
+          return;
+        }
+
+        code = data['playCode'];
+        name = data['playName'];
+        author = data['playAuthor']
+
+        midElem.innerText = `${name} (${code})`
+      }
+
+      function timerClear() {
+        rightElem.innerText = "";
+      }
+
+      function timerTick() {
+        sec++;
+
+        if (sec == 60) {
+          sec = 0;
+          min++;
+          minStr = padStart(min.toString());
+        }
+
+        timerUpdate();
+      }
+
+      //
+      // Yabba message processing
+      //
+
+      function on_queueChange(data) {
+        levelCount = 0;
+        count = data["size"];
+
+        updateQueueDisplay(count);
+      }
+
+      function cleanup() {
+        updateTitle({});
+        timerClear();
+        cleanupTimeout = null;
+      }
+
+      function on_playGiveUp(data) {
+        clearInterval(interval);
+        cleanupTimeout = setTimeout(cleanup, 3000);
+      }
+
+      function on_playStart(data) {
+        if (cleanupTimeout != null) {
+          clearTimeout(cleanupTimeout);
+          cleanupTimeout = null;
+        }
+
+        sec = 0;
+        min = 0;
+        minStr = "00";
+
+        updateQueueDisplay(-1);
+        updateTitle(data);
+        timerUpdate();
+
+        interval = setInterval(timerTick, 1000);
+      }
+
+      function on_playSuccess(data) {
+        clearInterval(interval);
+        cleanupTimeout = setTimeout(cleanup, 3000);
+      }
+
+      function on_timerPause(data) {
+        clearInterval(interval);
+        interval = null;
+      }
+
+      function on_timerPlay(data) {
+        interval = setInterval(timerTick, 1000);
+      }
+
+      //
+      // Message processing
+      //
+
+      function unhandled(data) {
+        console.log(`Unhandled request: ${JSON.stringify(data)}`);
+      }
+
+      var dispatchTable = {
+        'syncRequest': function(){},
+
+        'init': on_init,
+        "playGiveUp": on_playGiveUp,
+        "playStart": on_playStart,
+        "playSuccess": on_playSuccess,
+        "queueChange": on_queueChange,
+        "queueClose": function() { setQueueIsOpen(false); },
+        "queueOpen": function() { setQueueIsOpen(true); },
+        "syncReply": on_syncReply,
+        "timerPause": on_timerPause,
+        "timerPlay": on_timerPlay,
+      };
+
+      function yabbaConnect()
+      {
+        console.log("overlay: Attempting Yabba connection...");
+        websock = new WebSocket("ws://localhost:8002");
+
+        websock.onopen = function(event) {
+          console.log("overlay: connected to yabba.");
+        }
+        websock.onmessage = function(event) {
+          var data = JSON.parse(event.data);
+          var fn = dispatchTable[data['op']] || unhandled;
+
+          fn(data);
+        };
+        websock.onclose = function() {
+          setTimeout(yabbaConnect, 1000);
+        }
+      }
+
+      //
+      // Initialization
+      //
+
+      function setStyle(params, paramName, elem, elemProp)
+      {
+        var p = params.get(paramName);
+
+        if (p)
+          elem.style[elemProp] = p;
+      }
+
+      function applyParameterOptions()
+      {
+        // OBS cef does not define this, so bail.
+        if (typeof(URLSearchParams) != "function")
+          return;
+
+        const searchStr = window.location.search;
+        const params = new URLSearchParams(searchStr);
+
+        setStyle(params, 'backgroundColor', mainElem, 'backgroundColor');
+        setStyle(params, 'color', mainElem, 'color');
+      }
+
+      function init() {
+        [mainElem, leftElem, midElem, rightElem] = [
+          "main",
+          "leftDiv",
+          "midDiv",
+          "rightDiv"].map(m => document.getElementById(m) )
+
+        applyParameterOptions();
+        yabbaConnect();
+      }
+    </script>
+  </head>
+  <body onload='init()'>
+    <div id="main">
+      <div class="inner-div" id="leftDiv"></div>
+      <div class="inner-div" id="midDiv"></div>
+      <div class="inner-div" id="rightDiv"></div>
+    </div>
+  </body>
+</html>
