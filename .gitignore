@@ -1,0 +1,9 @@
+.mocuic/
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+src/resources.qrc.depends
+src/qrc_resources.cpp
+yabba
