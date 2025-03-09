@@ -1,5 +1,4 @@
 #include <QApplication>
-#include <QDesktopWidget>
 #include <QDir>
 #include <QFile>
 
@@ -8,21 +7,13 @@
 
 #define Y_COMMAND_LIST "!addlevel, !commands, !leave, !list, !queue"
 
-void centerWidget(QWidget *w)
-{
-    QRect geometry = QApplication::desktop()->screenGeometry();
-    int x = (geometry.width() - w->width()) / 2;
-    int y = (geometry.height() - w->height()) / 2;
-    w->move(x, y);
-}
-
 YController::YController()
 {
     _webSock = new YWebSock(8002);
     _settings = YSettings::loadSettings();
     _bot = new YBotConnection(_settings);
     _mw = new YMainWindow(_webSock);
-    _levelcodeRegExp = QRegExp("^\\s+[A-Za-z0-9]{4}\\-[A-Za-z0-9]{4}\\s*$");
+    _levelcodeRegExp = QRegularExpression("^\\s+[A-Za-z0-9]{4}\\-[A-Za-z0-9]{4}\\s*$");
 
     connect(_webSock, &YWebSock::messageInput,
             this, &YController::onWebSockMessageInput);
@@ -39,9 +30,7 @@ void YController::start()
     YInfoDialog *dialog = new YInfoDialog(_mw, _settings);
 
     dialog->resize(350, 200);
-    centerWidget(dialog);
     _mw->resize(500, 200);
-    centerWidget(_mw);
     _mw->show();
 
     connect(dialog, &YInfoDialog::startConnect,
@@ -78,27 +67,31 @@ void YController::onStartConnect()
     // On successful connection, onSocketRecv handles the Twitch auth reply.
 }
 
+#include <QDebug>
+
 void YController::cmd_addlevel(QString username, QString cmd)
 {
     QString level = cmd.mid(9);
-    int index = _levelcodeRegExp.indexIn(level);
+    QRegularExpressionMatch match = _levelcodeRegExp.match(level);
 
-    if (index != 0) {
+    if (match.hasMatch() == false) {
         QString reply = QString("@%1: Invalid levelcode or the regexp I'm using is wrong.")
                 .arg(username);
 
+    qDebug() << reply;
         _bot->sendMessage(reply);
         return;
     }
 
-    level = _levelcodeRegExp.cap(0)
-                            .trimmed()
-                            .toUpper();
+    level = match.captured(0)
+                 .trimmed()
+                 .toUpper();
 
     if (_mw->getQueueIsOpen() == false) {
         QString reply = QString("@%1: box is tired (queue is closed).")
                     .arg(username);
 
+    qDebug() << reply;
         _bot->sendMessage(reply);
         return;
     }
@@ -116,6 +109,8 @@ void YController::cmd_addlevel(QString username, QString cmd)
     else
         reply = QString("@%1: Error: Already have a level in the queue.")
                 .arg(username);
+
+    qDebug() << reply;
 
     _bot->sendMessage(reply);
 }

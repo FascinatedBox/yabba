@@ -1,6 +1,6 @@
 #ifndef YMAINCONTROLLER_H
 # define YMAINCONTROLLER_H
-# include <QRegExp>
+# include <QRegularExpression>
 
 # include "ybotconnection.h"
 # include "ymainwindow.h"
@@ -32,7 +32,7 @@ private:
     void cmd_list(QString username, QString cmd);
     void cmd_leave(QString username, QString cmd);
 
-    QRegExp _levelcodeRegExp;
+    QRegularExpression _levelcodeRegExp;
     YBotConnection *_bot;
     YMainWindow *_mw;
     YSettings *_settings;

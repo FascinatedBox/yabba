@@ -1,8 +1,8 @@
-project(yabba)
 cmake_minimum_required(VERSION 3.5.0)
+project(yabba)
 
 find_package(
-    Qt5
+    Qt6
     COMPONENTS
         WebSockets
         Widgets
@@ -10,13 +10,7 @@ find_package(
 )
 
 set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
 set(MOCUIC_DIR ${CMAKE_CURRENT_BINARY_DIR}/.mocuic)
-
-qt5_add_resources(
-    RCC_SOURCES
-        src/resources.qrc
-)
 
 add_executable(
     yabba
@@ -39,6 +33,6 @@ set_target_properties(
 
 target_link_libraries(
     yabba
-        Qt5::WebSockets
-        Qt5::Widgets
+        Qt6::WebSockets
+        Qt6::Widgets
 )
