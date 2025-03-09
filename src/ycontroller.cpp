@@ -22,7 +22,7 @@ YController::YController()
     _settings = YSettings::loadSettings();
     _bot = new YBotConnection(_settings);
     _mw = new YMainWindow(_webSock);
-    _levelcodeRegExp = QRegExp("^[A-Za-z0-9]{4}\\-[A-Za-z0-9]{4}[\\r\\n\\s]");
+    _levelcodeRegExp = QRegExp("^\\s+[A-Za-z0-9]{4}\\-[A-Za-z0-9]{4}\\s*$");
 
     connect(_webSock, &YWebSock::messageInput,
             this, &YController::onWebSockMessageInput);
@@ -80,7 +80,7 @@ void YController::onStartConnect()
 
 void YController::cmd_addlevel(QString username, QString cmd)
 {
-    QString level = cmd.mid(10);
+    QString level = cmd.mid(9);
     int index = _levelcodeRegExp.indexIn(level);
 
     if (index != 0) {
